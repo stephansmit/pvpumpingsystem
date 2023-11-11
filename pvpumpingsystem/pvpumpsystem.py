@@ -378,7 +378,7 @@ class PVPumpSystem(object):
         self.water_stored = calc_reservoir(self.reservoir, self.flow.Qlpm,
                                            self.consumption.flow_rate.Qlpm)
 
-    def run_model(self, friction=False, starting_soc='morning', **kwargs):
+    def run_model(self, friction=False, starting_soc='morning', calc_derivatives=True, **kwargs):
         """
         Comprehensive modeling of the PVPS. Computes Loss of Power Supply (LLP)
         and stores it as an attribute. Re-run eveything even if already
@@ -402,25 +402,27 @@ class PVPumpSystem(object):
         # 'disable' removes the progress bar
         self.calc_flow(disable=True, friction=friction)
         self.calc_efficiency()
-        self.calc_reservoir(starting_soc=starting_soc)
 
-        self.consumption.flow_rate = cs.adapt_to_flow_pumped(
-                self.consumption.flow_rate,
-                self.flow.Qlpm)
+        if calc_derivatives:
+            self.calc_reservoir(starting_soc=starting_soc)
 
-        total_water_required = sum(self.consumption.flow_rate.Qlpm*60)
-        total_water_lacking = -sum(self.water_stored.extra_water[
-                self.water_stored.extra_water < 0])
+            self.consumption.flow_rate = cs.adapt_to_flow_pumped(
+                    self.consumption.flow_rate,
+                    self.flow.Qlpm)
 
-        # water shortage probability
-        try:
-            self.llp = total_water_lacking / total_water_required
-        except ZeroDivisionError:
-            self.llp = np.nan
+            total_water_required = sum(self.consumption.flow_rate.Qlpm*60)
+            total_water_lacking = -sum(self.water_stored.extra_water[
+                    self.water_stored.extra_water < 0])
 
-        # Price of motorpump, pv modules, reservoir, mppt
-        self.initial_investment = fin.initial_investment(self, **kwargs)
-        self.npv = fin.net_present_value(self, **kwargs)
+            # water shortage probability
+            try:
+                self.llp = total_water_lacking / total_water_required
+            except ZeroDivisionError:
+                self.llp = np.nan
+
+            # Price of motorpump, pv modules, reservoir, mppt
+            self.initial_investment = fin.initial_investment(self, **kwargs)
+            self.npv = fin.net_present_value(self, **kwargs)
 
 
 def function_i_from_v(V, I_L, I_o, R_s, R_sh, nNsVth,
